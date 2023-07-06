@@ -84,9 +84,11 @@ private:
         const std::vector<Problem::Node>& nodes_;
     };
 
-    size_t disable_states(Step& step, const std::set<size_t>& states);
+    bool disable_states(Step& step, const std::set<size_t>& states);
 
-    void backtrack(size_t conflicting_node);
+    void backtrack();
+
+    void rollback(Step& step);
 
     bool select_next_cell();
 

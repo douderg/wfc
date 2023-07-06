@@ -68,9 +68,10 @@ std::vector<size_t> eval(size_t w, size_t h, size_t s, size_t d) {
 int main(int argc , char** argv) {
     size_t w = 64;
     size_t h = w;
-    auto rgb = eval(w, h, 156, 4);
+    auto rgb = eval(w, h, 156, 10);
     if (rgb.empty()) {
         std::cerr << "no solution\n";
+        return EXIT_FAILURE;
     }
     std::ofstream f("output.ppm");
     f << "P3\n" << w << " " << h << "\n255\n";

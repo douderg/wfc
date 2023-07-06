@@ -5,7 +5,6 @@
 #include <numeric>
 #include <cassert>
 
-
 namespace wfc {
 
 Problem::Problem(size_t count, size_t number_of_states):
@@ -101,8 +100,8 @@ std::vector<size_t> Problem::solve() const {
 
 
 Problem::Node::Node(size_t states):
-    is_available(states),
-    available_states{states}
+    is_available(states, false),
+    available_states{0}
 {
 }
 
@@ -128,6 +127,17 @@ Solution::Solution(const Problem& problem):
     std::chrono::system_clock clock;
     rng_.seed(clock.now().time_since_epoch().count());
     std::iota(order_.begin(), order_.end(), 0);
+#ifndef NDEBUG
+    for (const auto& node : problem_.nodes_) {
+        size_t c = 0;
+        for (size_t i=0; i<problem_.number_of_states_; ++i) {
+            if (node.is_available[i]) {
+                ++c;
+            }
+        }
+        assert(c == node.available_states);
+    }
+#endif
     select_next_cell();
 }
 
@@ -143,12 +153,11 @@ bool Solution::next() {
     auto disabled_states = collapse_state(step);
     
     solution_[step.cell] = step.state;
-    size_t conflicting_node = disable_states(step, disabled_states);
-    if (conflicting_node == solution_.size()) {
+    if (disable_states(step, disabled_states)) {
         fixed_[step.cell] = true;
         return select_next_cell();
     } else {
-        backtrack(conflicting_node);
+        backtrack();
     }
     
     return true;
@@ -165,7 +174,7 @@ const std::vector<size_t>& Solution::get_value() const {
 }
 
 
-size_t Solution::disable_states(Step& step, const std::set<size_t>& states) {
+bool Solution::disable_states(Step& step, const std::set<size_t>& states) {
     std::vector<bool> visited(problem_.nodes_.size());
     using wave_t = std::map<size_t, std::set<size_t>>;
     wave_t wave;
@@ -185,14 +194,14 @@ size_t Solution::disable_states(Step& step, const std::set<size_t>& states) {
             }
 
             if (actual_removed.size() == node.available_states) {
-                return w.first;
+                return false;
             }
             
             for (auto& link : node.links) {
                 if (fixed_[link.first]) {
                     auto it = actual_removed.find(solution_[link.first]);
                     if (it != actual_removed.end()) {
-                        return link.first;
+                        return false;
                     }
                 }
 
@@ -218,52 +227,41 @@ size_t Solution::disable_states(Step& step, const std::set<size_t>& states) {
         }
         wave = next;
     }
-    return solution_.size();
+    return true;
 }
 
 
-void Solution::backtrack(size_t conflicting_node) {
+void Solution::backtrack() {
     while (!steps_.empty()) {
         Step& next = steps_.top();
-        
         fixed_[next.cell] = false;
         if (!next.available.empty()) {
-            for (const auto& p : next.rollback_info) {
-                auto& node = problem_.nodes_[p.first];
-                for (size_t state : p.second.disabled) {
-                    node.is_available[state] = true;
-
-                    for (size_t link : p.second.links) {
-                        const auto& allowed = problem_.constraints_[node.links[link].constraint][state];
-                        for (size_t i : allowed) {
-                            ++node.links[link].counters[state];
-                        }
-                    }
-                }
-                node.available_states += p.second.disabled.size();
-            }
+            rollback(next);
             next.rollback_info.clear();
             return;
         }
-        for (const auto& p : next.rollback_info) {
-            auto& node = problem_.nodes_[p.first];
-            for (size_t state : p.second.disabled) {
-                node.is_available[state] = true;
-
-                for (size_t link : p.second.links) {
-                    const auto& allowed = problem_.constraints_[node.links[link].constraint][state];
-                    for (size_t i : allowed) {
-                        ++node.links[link].counters[state];
-                    }
-                }
-            }
-            node.available_states += p.second.disabled.size();
-        }
-
+        rollback(next);
         order_.push_back(next.cell);
         steps_.pop();
     }
+}
 
+
+void Solution::rollback(Step& step) {
+    for (const auto& p : step.rollback_info) {
+        auto& node = problem_.nodes_[p.first];
+        for (size_t state : p.second.disabled) {
+            node.is_available[state] = true;
+
+            for (size_t link : p.second.links) {
+                const auto& allowed = problem_.constraints_[node.links[link].constraint][state];
+                for (size_t i : allowed) {
+                    ++node.links[link].counters[state];
+                }
+            }
+        }
+        node.available_states += p.second.disabled.size();
+    }
 }
 
 
@@ -274,7 +272,7 @@ bool Solution::select_next_cell() {
 
     std::make_heap(order_.begin(), order_.end(), ordering_);
     std::pop_heap(order_.begin(), order_.end(), ordering_);
-
+    
     Step next;
     next.cell = order_.back();
     order_.pop_back();
@@ -286,15 +284,15 @@ bool Solution::select_next_cell() {
                 next.available.push_back(i);
             }
         }
-        assert(!next.available.empty());
+        assert(next.available.size() == node.available_states);
         std::shuffle(next.available.begin(), next.available.end(), rng_);
         steps_.push(next);
         return true;
     }
 
     steps_.push(next);
-    backtrack(solution_.size());
-    return true;
+    backtrack();
+    return !steps_.empty();
 }
 
 
