@@ -3,12 +3,8 @@
 #include <vector>
 #include <map>
 #include <set>
-#include <deque>
 #include <stack>
-#include <algorithm>
-#include <numeric>
 #include <random>
-#include <chrono>
 
 namespace wfc {
 
@@ -18,7 +14,7 @@ class Problem {
     friend class Solution;
 public:
 
-    using constraint_t = std::vector<std::set<size_t>>;
+    using constraint_t = std::vector<std::set<size_t>>; // encodes compatible neighboring states for each available state
 
     Problem() = default;
 
@@ -30,7 +26,7 @@ public:
 
     void enable_states(size_t cell, const std::set<size_t>& states);
 
-    std::map<size_t, std::set<size_t>> disable_states(size_t cell, const std::set<size_t>& states);
+    void disable_states(size_t cell, const std::set<size_t>& states);
 
     std::vector<size_t> solve() const;
 
@@ -72,7 +68,7 @@ private:
     struct Step {
         struct RollbackInfo {
             std::set<size_t> disabled;
-            std::vector<size_t> links;
+            std::set<size_t> links;
         };
         size_t cell;
         size_t state;

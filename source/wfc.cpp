@@ -1,8 +1,10 @@
-#include "wfc.hpp"
+#include <wfc.hpp>
 #include <numeric>
 #include <algorithm>
-#include <deque>
-#include <iostream>
+#include <chrono>
+#include <numeric>
+#include <cassert>
+
 
 namespace wfc {
 
@@ -41,14 +43,10 @@ void Problem::enable_states(size_t cell, const std::set<size_t>& states) {
                 nodes_[s.first].is_available[state] = true;
                 ++nodes_[s.first].available_states;
                 for (auto& link : nodes_[s.first].links) {
-                    std::set<size_t> propagated;
                     for (size_t i : constraints_[link.second.constraint][state]) {
                         if (link.second.counters[i]++ == 0) {
-                            propagated.insert(i);
+                            next[link.first].insert(i);
                         }
-                    }
-                    if (!visited[link.first]) {
-                        next[link.first].insert(propagated.begin(), propagated.end());
                     }
                 }
             }
@@ -61,8 +59,7 @@ void Problem::enable_states(size_t cell, const std::set<size_t>& states) {
 }
 
 
-std::map<size_t, std::set<size_t>> Problem::disable_states(size_t cell, const std::set<size_t>& states) {
-    std::map<size_t, std::set<size_t>> result;
+void Problem::disable_states(size_t cell, const std::set<size_t>& states) {
     std::vector<bool> visited(nodes_.size());
     using step_t = std::map<size_t, std::set<size_t>>;
     step_t step;
@@ -80,15 +77,10 @@ std::map<size_t, std::set<size_t>> Problem::disable_states(size_t cell, const st
                 node.is_available[state] = false;
                 --node.available_states;
                 for (auto& link : node.links) {
-                    std::set<size_t> propagated;
                     for (size_t i : constraints_[link.second.constraint][state]) {
                         if (--link.second.counters[i] == 0) {
-                            propagated.insert(i);
+                            next[link.first].insert(i);
                         }
-                    }
-
-                    if (!visited[link.first]) {
-                        next[link.first].insert(propagated.begin(), propagated.end());
                     }
                 }
             }
@@ -98,15 +90,13 @@ std::map<size_t, std::set<size_t>> Problem::disable_states(size_t cell, const st
         }
         step = next;
     }
-    return result;
 }
 
 
 std::vector<size_t> Problem::solve() const {
     Solution solution(*this);
     while (solution.next());
-    std::cout << solution.complete() << "\n";
-    return solution.get_value();
+    return solution.complete() ? solution.get_value() : std::vector<size_t>();
 }
 
 
@@ -199,33 +189,28 @@ size_t Solution::disable_states(Step& step, const std::set<size_t>& states) {
             }
             
             for (auto& link : node.links) {
-                bool do_not_propagate = visited[link.first];
                 if (fixed_[link.first]) {
                     auto it = actual_removed.find(solution_[link.first]);
                     if (it != actual_removed.end()) {
                         return link.first;
                     }
-                    do_not_propagate = true;
                 }
-                step.rollback_info[w.first].links.push_back(link.first);
-                std::vector<size_t> propagated;
+
+                step.rollback_info[w.first].links.insert(link.first);
                 for (size_t state : actual_removed) {
                     const auto& allowed = problem_.constraints_[link.second.constraint][state];
                     for (size_t i : allowed) {
                         if (--link.second.counters[i] == 0) {
-                            propagated.push_back(i);
+                            next[link.first].insert(i);
                         }
                     }
-                }
-                if (!do_not_propagate) {
-                    next[link.first].insert(propagated.begin(), propagated.end());
                 }
             }
             for (size_t state : actual_removed) {
                 node.is_available[state] = false;
             }
             node.available_states -= actual_removed.size();
-            step.rollback_info[w.first].disabled = actual_removed;
+            step.rollback_info[w.first].disabled.insert(actual_removed.begin(), actual_removed.end());
         }
 
         for (const auto& w : next) {
@@ -301,10 +286,7 @@ bool Solution::select_next_cell() {
                 next.available.push_back(i);
             }
         }
-        if (next.available.empty()) {
-            std::cerr << "nope\n";
-            return false;
-        }
+        assert(!next.available.empty());
         std::shuffle(next.available.begin(), next.available.end(), rng_);
         steps_.push(next);
         return true;

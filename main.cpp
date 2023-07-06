@@ -1,4 +1,4 @@
-#include "wfc.hpp"
+#include <wfc.hpp>
 #include <fstream>
 #include <iostream>
 #include <chrono>
@@ -68,8 +68,10 @@ std::vector<size_t> eval(size_t w, size_t h, size_t s, size_t d) {
 int main(int argc , char** argv) {
     size_t w = 64;
     size_t h = w;
-    auto rgb = eval(w, h, 156, 10);
-
+    auto rgb = eval(w, h, 156, 4);
+    if (rgb.empty()) {
+        std::cerr << "no solution\n";
+    }
     std::ofstream f("output.ppm");
     f << "P3\n" << w << " " << h << "\n255\n";
     for (size_t i = 0; i < h; ++i) {
