@@ -49,7 +49,7 @@ void Problem::enable_states(size_t cell, const std::set<size_t>& states) {
                 }
             }
         }
-        step = next;
+        step = std::move(next);
     }
 }
 
@@ -78,7 +78,7 @@ void Problem::disable_states(size_t cell, const std::set<size_t>& states) {
                 }
             }
         }
-        step = next;
+        step = std::move(next);
     }
 }
 
@@ -116,13 +116,13 @@ Problem::Node::Node(size_t states):
 
 
 Solution::Ordering::Ordering(const std::vector<Problem::Node>& nodes):
-    nodes_{nodes}
+    nodes_{&nodes}
 {
 }
 
 
 bool Solution::Ordering::operator()(size_t x, size_t y) const {
-    return nodes_[x].available_states > nodes_[y].available_states;
+    return nodes_->operator[](x).available_states > nodes_->operator[](y).available_states;
 }
 
 
@@ -133,8 +133,6 @@ Solution::Solution(const Problem& problem):
     order_(solution_.size()),
     ordering_{problem_.nodes_}
 {
-    // std::chrono::system_clock clock;
-    // rng_.seed(clock.now().time_since_epoch().count());
     std::iota(order_.begin(), order_.end(), 0);
 #ifndef NDEBUG
     for (const auto& node : problem_.nodes_) {
@@ -205,7 +203,7 @@ bool Solution::disable_states(Step& step, const std::set<size_t>& states) {
             node.available_states -= actual_removed.size();
             step.rollback_info[w.first].disabled.insert(actual_removed.begin(), actual_removed.end());
         }
-        wave = next;
+        wave = std::move(next);
     }
     return true;
 }
@@ -266,7 +264,6 @@ bool Solution::select_next_cell(bool &reorder_states) {
         }
         assert(next.available.size() == node.available_states);
         reorder_states = true;
-        // std::shuffle(next.available.begin(), next.available.end(), rng_);
         steps_.push(next);
         return true;
     }

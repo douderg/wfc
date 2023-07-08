@@ -60,6 +60,12 @@ public:
 
     Solution(const Problem& problem);
 
+    Solution(const Solution&) = default;
+    Solution(Solution&&) = default;
+
+    Solution& operator=(const Solution&) = default;
+    Solution& operator=(Solution&&) = default;
+
     template <class RNG>
     bool next(RNG&& rng) {
         bool reorder_states = false;
@@ -104,9 +110,15 @@ private:
     class Ordering {
     public:
         Ordering(const std::vector<Problem::Node>& nodes);
+        Ordering(const Ordering&) = default;
+        Ordering(Ordering&&) = default;
+
+        Ordering& operator=(const Ordering&) = default;
+        Ordering& operator=(Ordering&&) = default;
+
         bool operator()(size_t x, size_t y) const;
     private:
-        const std::vector<Problem::Node>& nodes_;
+        const std::vector<Problem::Node>* nodes_;
     };
 
     bool disable_states(Step& step, const std::set<size_t>& states);
