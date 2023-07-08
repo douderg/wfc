@@ -57,7 +57,7 @@ private:
 
 class Solution {
 public:
-
+    Solution() = default;
     Solution(const Problem& problem);
 
     Solution(const Solution&) = default;
@@ -109,6 +109,7 @@ private:
 
     class Ordering {
     public:
+        Ordering() = default;
         Ordering(const std::vector<Problem::Node>& nodes);
         Ordering(const Ordering&) = default;
         Ordering(Ordering&&) = default;
