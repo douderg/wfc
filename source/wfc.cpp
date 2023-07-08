@@ -83,10 +83,28 @@ void Problem::disable_states(size_t cell, const std::set<size_t>& states) {
 }
 
 
-std::vector<size_t> Problem::solve() const {
+bool Problem::solve(std::vector<size_t>& result) const {
     Solution solution(*this);
-    while (solution.next());
-    return solution.complete() ? solution.get_value() : std::vector<size_t>();
+    std::chrono::system_clock clock;
+    std::default_random_engine rng(clock.now().time_since_epoch().count());
+    while (solution.next(rng));
+    if (solution.complete()) {
+        result = solution.get_value();
+        return true;
+    }
+    return false;
+}
+
+
+bool Problem::solve(std::vector<size_t>& result, unsigned int seed) const {
+    Solution solution(*this);
+    std::default_random_engine rng(seed);
+    while (solution.next(rng));
+    if (solution.complete()) {
+        result = solution.get_value();
+        return true;
+    }
+    return false;
 }
 
 
@@ -115,8 +133,8 @@ Solution::Solution(const Problem& problem):
     order_(solution_.size()),
     ordering_{problem_.nodes_}
 {
-    std::chrono::system_clock clock;
-    rng_.seed(clock.now().time_since_epoch().count());
+    // std::chrono::system_clock clock;
+    // rng_.seed(clock.now().time_since_epoch().count());
     std::iota(order_.begin(), order_.end(), 0);
 #ifndef NDEBUG
     for (const auto& node : problem_.nodes_) {
@@ -129,29 +147,6 @@ Solution::Solution(const Problem& problem):
         assert(c == node.available_states);
     }
 #endif
-    select_next_cell();
-}
-
-
-bool Solution::next() {
-    if (steps_.empty()) {
-        return false;
-    }
-    auto& step = steps_.top();
-    step.state = step.available.back();
-    step.available.pop_back();
-
-    auto disabled_states = collapse_state(step);
-    
-    solution_[step.cell] = step.state;
-    if (disable_states(step, disabled_states)) {
-        fixed_[step.cell] = true;
-        return select_next_cell();
-    } else {
-        backtrack();
-    }
-    
-    return true;
 }
 
 
@@ -250,7 +245,7 @@ void Solution::rollback(Step& step) {
 }
 
 
-bool Solution::select_next_cell() {
+bool Solution::select_next_cell(bool &reorder_states) {
     if (order_.empty()) {
         return false;
     }
@@ -270,7 +265,8 @@ bool Solution::select_next_cell() {
             }
         }
         assert(next.available.size() == node.available_states);
-        std::shuffle(next.available.begin(), next.available.end(), rng_);
+        reorder_states = true;
+        // std::shuffle(next.available.begin(), next.available.end(), rng_);
         steps_.push(next);
         return true;
     }

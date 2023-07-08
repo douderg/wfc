@@ -28,7 +28,9 @@ public:
 
     void disable_states(size_t cell, const std::set<size_t>& states);
 
-    std::vector<size_t> solve() const;
+    bool solve(std::vector<size_t>& result) const;
+
+    bool solve(std::vector<size_t>& result, unsigned int seed) const;
 
 private:
 
@@ -58,7 +60,30 @@ public:
 
     Solution(const Problem& problem);
 
-    bool next();
+    template <class RNG>
+    bool next(RNG&& rng) {
+        bool reorder_states = false;
+        if (!select_next_cell(reorder_states)) {
+            return false;
+        }
+        auto& step = steps_.top();
+        if (reorder_states) {
+            std::shuffle(step.available.begin(), step.available.end(), std::forward<RNG>(rng));
+        }
+        step.state = step.available.back();
+        step.available.pop_back();
+
+        auto disabled_states = collapse_state(step);
+        
+        solution_[step.cell] = step.state;
+        if (disable_states(step, disabled_states)) {
+            fixed_[step.cell] = true;
+        } else {
+            backtrack();
+        }
+        
+        return true;
+    }
 
     bool complete();
 
@@ -90,7 +115,7 @@ private:
 
     void rollback(Step& step);
 
-    bool select_next_cell();
+    bool select_next_cell(bool &reorder_states);
 
     std::set<size_t> collapse_state(const Step& step);
 
@@ -101,8 +126,6 @@ private:
     std::vector<size_t> solution_;
     std::vector<size_t> order_;
     Ordering ordering_;
-    std::default_random_engine rng_;
-    
 };
 
 }

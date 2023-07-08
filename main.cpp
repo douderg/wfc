@@ -4,7 +4,7 @@
 #include <chrono>
 #include <numeric>
 
-std::vector<size_t> eval(size_t w, size_t h, size_t s, size_t d) {
+bool eval(size_t w, size_t h, size_t s, size_t d, std::vector<size_t>& result) {
 
     std::chrono::steady_clock clock;
 
@@ -58,19 +58,20 @@ std::vector<size_t> eval(size_t w, size_t h, size_t s, size_t d) {
 
     std::cout << "initialization " << dur(t2 - t1) << "\n";
 
-    auto result = problem.solve();
-
+    if (!problem.solve(result)) {
+        return false;
+    }
     auto t3 = clock.now();
     std::cout << "solution " << dur(t3 - t2) << "\n";
-    return result;
+    return true;
 }
 
 
 int main(int argc , char** argv) {
     size_t w = 64;
     size_t h = w;
-    auto rgb = eval(w, h, 156, 10);
-    if (rgb.empty()) {
+    std::vector<size_t> rgb(w * h);
+    if (!eval(w, h, 156, 10, rgb)) {
         std::cerr << "no solution\n";
         return EXIT_FAILURE;
     }
