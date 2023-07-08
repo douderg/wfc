@@ -91,7 +91,7 @@ public:
         return true;
     }
 
-    bool complete();
+    bool complete() const;
 
     const std::vector<size_t>& get_value() const;
      

@@ -148,7 +148,7 @@ Solution::Solution(const Problem& problem):
 }
 
 
-bool Solution::complete() {
+bool Solution::complete() const {
     return order_.empty();
 }
 
