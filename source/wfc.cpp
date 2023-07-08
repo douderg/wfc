@@ -28,7 +28,6 @@ void Problem::link(size_t src, size_t dst, size_t constraint) {
 
 
 void Problem::enable_states(size_t cell, const std::set<size_t>& states) {
-    std::vector<bool> visited(nodes_.size());
     using step_t = std::map<size_t, std::set<size_t>>;
     step_t step;
     step.emplace(cell, states);
@@ -50,20 +49,15 @@ void Problem::enable_states(size_t cell, const std::set<size_t>& states) {
                 }
             }
         }
-        for (const auto& s : step) {
-            visited[s.first] = true;
-        }
         step = next;
     }
 }
 
 
 void Problem::disable_states(size_t cell, const std::set<size_t>& states) {
-    std::vector<bool> visited(nodes_.size());
     using step_t = std::map<size_t, std::set<size_t>>;
     step_t step;
     step.emplace(cell, states);
-    visited[cell] = true;
     while (!step.empty()) {
         step_t next;
         
@@ -83,9 +77,6 @@ void Problem::disable_states(size_t cell, const std::set<size_t>& states) {
                     }
                 }
             }
-        }
-        for (const auto& s : next) {
-            visited[s.first] = true;
         }
         step = next;
     }
@@ -175,11 +166,9 @@ const std::vector<size_t>& Solution::get_value() const {
 
 
 bool Solution::disable_states(Step& step, const std::set<size_t>& states) {
-    std::vector<bool> visited(problem_.nodes_.size());
     using wave_t = std::map<size_t, std::set<size_t>>;
     wave_t wave;
     wave.emplace(step.cell, states);
-    visited[step.cell] = true;
 
     while (!wave.empty()) {
         wave_t next;
@@ -220,10 +209,6 @@ bool Solution::disable_states(Step& step, const std::set<size_t>& states) {
             }
             node.available_states -= actual_removed.size();
             step.rollback_info[w.first].disabled.insert(actual_removed.begin(), actual_removed.end());
-        }
-
-        for (const auto& w : next) {
-            visited[w.first] = true;
         }
         wave = next;
     }

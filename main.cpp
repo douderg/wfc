@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <chrono>
+#include <numeric>
 
 std::vector<size_t> eval(size_t w, size_t h, size_t s, size_t d) {
 
