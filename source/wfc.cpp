@@ -147,6 +147,46 @@ Solution::Solution(const Problem& problem):
 #endif
 }
 
+Solution::Solution(const Solution& other):
+    problem_(other.problem_),
+    steps_(other.steps_),
+    fixed_(other.fixed_),
+    solution_(other.solution_),
+    order_(other.order_)
+{
+    ordering_ = Ordering(problem_.nodes_);
+}
+
+Solution::Solution(Solution&& other):
+    problem_(std::move(other.problem_)),
+    steps_(std::move(other.steps_)),
+    fixed_(std::move(other.fixed_)),
+    solution_(std::move(other.solution_)),
+    order_(std::move(other.order_))
+{
+    ordering_ = Ordering(problem_.nodes_);
+}
+
+Solution& Solution::operator=(const Solution& other) {
+    problem_ = other.problem_;
+    steps_ = other.steps_;
+    fixed_ = other.fixed_;
+    solution_ = other.solution_;
+    order_ = other.order_;
+    ordering_ = Ordering(problem_.nodes_);
+    return *this;
+}
+
+Solution& Solution::operator=(Solution&& other) {
+    problem_ = std::move(other.problem_);
+    steps_ = std::move(other.steps_);
+    fixed_ = std::move(other.fixed_);
+    solution_ = std::move(other.solution_);
+    order_ = std::move(other.order_);
+    ordering_ = Ordering(problem_.nodes_);
+    return *this;
+}
+
 
 bool Solution::complete() const {
     return order_.empty();

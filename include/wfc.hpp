@@ -60,11 +60,11 @@ public:
     Solution() = default;
     Solution(const Problem& problem);
 
-    Solution(const Solution&) = default;
-    Solution(Solution&&) = default;
+    Solution(const Solution&);
+    Solution(Solution&&);
 
-    Solution& operator=(const Solution&) = default;
-    Solution& operator=(Solution&&) = default;
+    Solution& operator=(const Solution&);
+    Solution& operator=(Solution&&);
 
     template <class RNG>
     bool next(RNG&& rng) {
