@@ -3,6 +3,7 @@
 #include <iostream>
 #include <chrono>
 #include <numeric>
+#include <iomanip>
 
 bool eval(size_t w, size_t h, size_t s, size_t d, std::vector<size_t>& result) {
 
@@ -10,7 +11,7 @@ bool eval(size_t w, size_t h, size_t s, size_t d, std::vector<size_t>& result) {
 
     auto t0 = clock.now();
     wfc::Problem problem(w * h, s);
-    wfc::Problem::constraint_t constraint;
+    wfc::Constraint constraint(s);
     for (size_t i = 0; i < s; ++i) {
         std::set<size_t> states;
         for (size_t j = 1; j < d; ++j) {
@@ -21,10 +22,9 @@ bool eval(size_t w, size_t h, size_t s, size_t d, std::vector<size_t>& result) {
                 states.insert(i + j);
             }
         }
-        constraint.push_back(states);
+        constraint.set_compatible_states(i, states);
     }
-    problem.add_state_constraint(constraint);
-
+    problem.add_constraint(constraint);
     
     for (size_t i = 1; i < h; ++i) {
         for (size_t j = 1; j < w; ++j) {
@@ -68,10 +68,10 @@ bool eval(size_t w, size_t h, size_t s, size_t d, std::vector<size_t>& result) {
 
 
 int main(int argc , char** argv) {
-    size_t w = 64;
+    size_t w = 256;
     size_t h = w;
     std::vector<size_t> rgb(w * h);
-    if (!eval(w, h, 156, 10, rgb)) {
+    if (!eval(w, h, 156, 4, rgb)) {
         std::cerr << "no solution\n";
         return EXIT_FAILURE;
     }

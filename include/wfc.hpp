@@ -10,17 +10,42 @@ namespace wfc {
 
 class Solution;
 
+
+class Constraint {
+public:
+    Constraint() = default;
+    Constraint(size_t total_states);
+    Constraint(const Constraint&) = default;
+    Constraint& operator=(const Constraint&) = default;
+    Constraint(Constraint&&) = default;
+    Constraint& operator=(Constraint&&) = default;
+
+    void set_compatible_states(size_t state, const std::set<size_t> neighbors);
+
+    void enable(size_t state, std::vector<size_t>& counters) const;
+    void enable(size_t state, std::vector<size_t>& counters, std::set<size_t>& toggled) const;
+    void disable(size_t state, std::vector<size_t>& counters) const;
+    void disable(size_t state, std::vector<size_t>& counters, std::set<size_t>& toggled) const;
+    bool validate() const;
+private:
+    std::vector<std::set<size_t>> compatibility_map_;
+
+};
+
 class Problem {
     friend class Solution;
 public:
-
-    using constraint_t = std::vector<std::set<size_t>>; // encodes compatible neighboring states for each available state
-
     Problem() = default;
 
     Problem(size_t node_count, size_t number_of_states);
 
-    void add_state_constraint(const constraint_t& constraint);
+    Problem(const Problem&) = default;
+    Problem& operator=(const Problem&) = default;
+
+    Problem(Problem&&) = default;
+    Problem& operator=(Problem&&) = default;
+
+    void add_constraint(const Constraint& constraint);
 
     void link(size_t src, size_t dst, size_t constraint);
 
@@ -31,6 +56,9 @@ public:
     bool solve(std::vector<size_t>& result) const;
 
     bool solve(std::vector<size_t>& result, unsigned int seed) const;
+
+    template <class ReorderFunc>
+    bool solve(std::vector<size_t>& result, ReorderFunc&& func) const;
 
 private:
 
@@ -51,7 +79,7 @@ private:
 
     std::vector<Node> nodes_;
     size_t number_of_states_;
-    std::vector<constraint_t> constraints_;
+    std::vector<Constraint> constraints_;
 };
 
 
@@ -68,34 +96,71 @@ public:
 
     template <class RNG>
     bool next(RNG&& rng) {
-        bool reorder_states = false;
-        if (!select_next_cell(reorder_states)) {
+        if (steps_.empty()) {
             return false;
         }
+
         auto& step = steps_.top();
-        if (reorder_states) {
+        if (reorder_states_) {
             std::shuffle(step.available.begin(), step.available.end(), std::forward<RNG>(rng));
+            reorder_states_ = false;
         }
         step.state = step.available.back();
         step.available.pop_back();
 
         auto disabled_states = collapse_state(step);
-        
         solution_[step.cell] = step.state;
+        fixed_[step.cell] = true;
         if (disable_states(step, disabled_states)) {
-            fixed_[step.cell] = true;
-        } else {
+            return select_next_cell();
+        }  else {
             backtrack();
         }
         
         return true;
     }
 
+    template <class ReorderFunc>
+    bool next_best(ReorderFunc&& func) {
+        if (steps_.empty()) {
+            return false;
+        }
+
+        auto& step = steps_.top();
+        if (reorder_states_) {
+            reorder_states(std::forward<ReorderFunc>(func), step.available);
+            reorder_states_ = false;
+        }
+
+        if (!step.available.empty()) {
+            step.state = step.available.back();
+            step.available.pop_back();
+
+            auto disabled_states = collapse_state(step);
+            solution_[step.cell] = step.state;
+            fixed_[step.cell] = true;
+            if (disable_states(step, disabled_states)) {
+                return select_next_cell();
+            }
+        }
+
+        backtrack();
+        return true;
+    }
+
     bool complete() const;
 
     const std::vector<size_t>& get_value() const;
+
+    size_t total_states() const;
      
 private:
+
+    template <class ReorderFunc>
+    void reorder_states(ReorderFunc&& func, std::vector<size_t>& remaining_available) const {
+        std::forward<ReorderFunc>(func)(*this, remaining_available);
+    }
+
     struct Step {
         struct RollbackInfo {
             std::set<size_t> disabled;
@@ -128,7 +193,7 @@ private:
 
     void rollback(Step& step);
 
-    bool select_next_cell(bool &reorder_states);
+    bool select_next_cell();
 
     std::set<size_t> collapse_state(const Step& step);
 
@@ -139,6 +204,19 @@ private:
     std::vector<size_t> solution_;
     std::vector<size_t> order_;
     Ordering ordering_;
+    bool reorder_states_;
 };
+
+
+template <class ReorderFunc>
+inline bool Problem::solve(std::vector<size_t>& result, ReorderFunc&& func) const {
+    Solution solution(*this);
+    while (solution.next_best(std::forward<ReorderFunc>(func)));
+    if (solution.complete()) {
+        result = solution.get_value();
+        return true;
+    }
+    return false;
+}
 
 }

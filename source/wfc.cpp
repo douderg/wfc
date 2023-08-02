@@ -5,7 +5,65 @@
 #include <numeric>
 #include <cassert>
 
+
 namespace wfc {
+
+Constraint::Constraint(size_t total_states):
+    compatibility_map_(total_states)
+{
+}
+
+
+void Constraint::set_compatible_states(size_t state, const std::set<size_t> neighbors) {
+    compatibility_map_[state] = neighbors;
+}
+
+
+void Constraint::enable(size_t state, std::vector<size_t>& counters) const {
+    for (size_t s : compatibility_map_[state]) {
+        ++counters[s];
+    }
+}
+
+
+void Constraint::enable(size_t state, std::vector<size_t>& counters, std::set<size_t>& toggled) const {
+    for (size_t s : compatibility_map_[state]) {
+        if (counters[s] == 0) {
+            toggled.insert(s);
+        }
+        ++counters[s];
+    }
+}
+
+
+void Constraint::disable(size_t state, std::vector<size_t>& counters) const {
+    for (size_t s : compatibility_map_[state]) {
+        --counters[s];
+    }
+}
+
+
+void Constraint::disable(size_t state, std::vector<size_t>& counters, std::set<size_t>& toggled) const {
+    for (size_t s : compatibility_map_[state]) {
+        if (--counters[s] == 0) {
+            toggled.insert(s);
+        }
+    }
+}
+
+
+bool Constraint::validate() const {
+    for (size_t i = 0; i < compatibility_map_.size(); ++i) {
+        for (size_t s : compatibility_map_[i]) {
+            auto it = compatibility_map_[s].find(i);
+            if (it == compatibility_map_[s].end()) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 
 Problem::Problem(size_t count, size_t number_of_states):
     nodes_(count, Node(number_of_states)),
@@ -14,8 +72,9 @@ Problem::Problem(size_t count, size_t number_of_states):
 }
 
 
-void Problem::add_state_constraint(const constraint_t& constraint) {
-    constraints_.emplace_back(constraint);
+void Problem::add_constraint(const Constraint& constraint) {
+    assert(constraint.validate());
+    constraints_.push_back(constraint);
 }
 
 
@@ -41,11 +100,7 @@ void Problem::enable_states(size_t cell, const std::set<size_t>& states) {
                 nodes_[s.first].is_available[state] = true;
                 ++nodes_[s.first].available_states;
                 for (auto& link : nodes_[s.first].links) {
-                    for (size_t i : constraints_[link.second.constraint][state]) {
-                        if (link.second.counters[i]++ == 0) {
-                            next[link.first].insert(i);
-                        }
-                    }
+                    constraints_[link.second.constraint].enable(state, link.second.counters, next[link.first]);
                 }
             }
         }
@@ -70,11 +125,7 @@ void Problem::disable_states(size_t cell, const std::set<size_t>& states) {
                 node.is_available[state] = false;
                 --node.available_states;
                 for (auto& link : node.links) {
-                    for (size_t i : constraints_[link.second.constraint][state]) {
-                        if (--link.second.counters[i] == 0) {
-                            next[link.first].insert(i);
-                        }
-                    }
+                    constraints_[link.second.constraint].disable(state, link.second.counters, next[link.first]);
                 }
             }
         }
@@ -122,6 +173,7 @@ Solution::Ordering::Ordering(const std::vector<Problem::Node>& nodes):
 
 
 bool Solution::Ordering::operator()(size_t x, size_t y) const {
+    assert(nodes_);
     return nodes_->operator[](x).available_states > nodes_->operator[](y).available_states;
 }
 
@@ -134,6 +186,7 @@ Solution::Solution(const Problem& problem):
     ordering_{problem_.nodes_}
 {
     std::iota(order_.begin(), order_.end(), 0);
+    select_next_cell();
 #ifndef NDEBUG
     for (const auto& node : problem_.nodes_) {
         size_t c = 0;
@@ -198,6 +251,11 @@ const std::vector<size_t>& Solution::get_value() const {
 }
 
 
+size_t Solution::total_states() const {
+    return problem_.number_of_states_;
+}
+
+
 bool Solution::disable_states(Step& step, const std::set<size_t>& states) {
     using wave_t = std::map<size_t, std::set<size_t>>;
     wave_t wave;
@@ -207,34 +265,28 @@ bool Solution::disable_states(Step& step, const std::set<size_t>& states) {
         wave_t next;
         for (const auto& w : wave) {
             auto &node = problem_.nodes_[w.first];
-
+            
             std::set<size_t> actual_removed;
             for (size_t state : w.second) {
                 if (node.is_available[state]) {
                     actual_removed.insert(state);
                 }
             }
-
             if (actual_removed.size() == node.available_states) {
                 return false;
             }
+
+            if (fixed_[w.first]) {
+                auto it = actual_removed.find(solution_[w.first]);
+                if (it != actual_removed.end()) {
+                    return false;
+                }
+            }
             
             for (auto& link : node.links) {
-                if (fixed_[link.first]) {
-                    auto it = actual_removed.find(solution_[link.first]);
-                    if (it != actual_removed.end()) {
-                        return false;
-                    }
-                }
-
                 step.rollback_info[w.first].links.insert(link.first);
                 for (size_t state : actual_removed) {
-                    const auto& allowed = problem_.constraints_[link.second.constraint][state];
-                    for (size_t i : allowed) {
-                        if (--link.second.counters[i] == 0) {
-                            next[link.first].insert(i);
-                        }
-                    }
+                    problem_.constraints_[link.second.constraint].disable(state, link.second.counters, next[link.first]);
                 }
             }
             for (size_t state : actual_removed) {
@@ -243,8 +295,10 @@ bool Solution::disable_states(Step& step, const std::set<size_t>& states) {
             node.available_states -= actual_removed.size();
             step.rollback_info[w.first].disabled.insert(actual_removed.begin(), actual_removed.end());
         }
+        
         wave = std::move(next);
     }
+
     return true;
 }
 
@@ -253,6 +307,7 @@ void Solution::backtrack() {
     while (!steps_.empty()) {
         Step& next = steps_.top();
         fixed_[next.cell] = false;
+        solution_[next.cell] = 0;
         if (!next.available.empty()) {
             rollback(next);
             next.rollback_info.clear();
@@ -270,12 +325,12 @@ void Solution::rollback(Step& step) {
         auto& node = problem_.nodes_[p.first];
         for (size_t state : p.second.disabled) {
             node.is_available[state] = true;
-
-            for (size_t link : p.second.links) {
-                const auto& allowed = problem_.constraints_[node.links[link].constraint][state];
-                for (size_t i : allowed) {
-                    ++node.links[link].counters[state];
-                }
+        }
+        for (size_t link_index : p.second.links) {
+            auto& link = node.links[link_index];
+            const auto& constraint = problem_.constraints_[link.constraint];
+            for (size_t state : p.second.disabled) {
+                constraint.enable(state, link.counters);
             }
         }
         node.available_states += p.second.disabled.size();
@@ -283,7 +338,7 @@ void Solution::rollback(Step& step) {
 }
 
 
-bool Solution::select_next_cell(bool &reorder_states) {
+bool Solution::select_next_cell() {
     if (order_.empty()) {
         return false;
     }
@@ -303,11 +358,11 @@ bool Solution::select_next_cell(bool &reorder_states) {
             }
         }
         assert(next.available.size() == node.available_states);
-        reorder_states = true;
+        reorder_states_ = true;
         steps_.push(next);
         return true;
     }
-
+    
     steps_.push(next);
     backtrack();
     return !steps_.empty();
